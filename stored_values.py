@@ -1,8 +1,10 @@
-stored_price_eow_1 = 0.0
-stored_price_eow_2 = 0.0
-stored_price_eow_3 = 0.0
-stored_price_eow_4 = 0.0
-stored_price_eow_5 = 0.0
+stored_eow_prices = {
+    "stored_price_eow_1":0.0, 
+    "stored_price_eow_2":0.0, 
+    "stored_price_eow_3":0.0, 
+    "stored_price_eow_4":0.0, 
+    "stored_price_eow_5":0.0
+}
 
 day_offset = 5
 week_1_day_offset = day_offset
