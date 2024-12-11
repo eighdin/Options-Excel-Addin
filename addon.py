@@ -1,6 +1,7 @@
 from datetime import *
 import xlwings as xw
 import yfinance as yf
+from typing import Annotated
 import numpy as np
 
 stored_eow_prices = {
@@ -41,30 +42,41 @@ def calculate_price_eow(hist_data, contract, contract_date, current_price, week_
                 stored_price_eow = entry.iloc[0]
     return stored_price_eow
 
-@xw.func(forcefullcalc=True)
-def options_data(date_purchased, ticker, strike_price_in, exp_date, contract_price_in, volume_in):
+@xw.func()
+def options_data(
+    date_purchased: str, 
+    contract_symbol: str, 
+    contract_price_in: float, 
+    volume_in: int,
+    want_out: str
+) -> str | float | int:
     global stored_price_exp
     global stored_percent_change_exp
     global stored_dollar_change_exp
     global stored_eow_prices
+    
+    # CONTRACT SYMBOL SLICING
+    strike_price = float(contract_symbol[-8:])/1000
+    ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
+    option_type = contract_symbol[-9:][:1]
+    exp_date_from_symbol = contract_symbol[ticker.__len__():ticker.__len__()+6]
+    exp_datetime_obj = datetime.strptime(exp_date_from_symbol, "%y%m%d")
+    exp_date_string = exp_datetime_obj.strftime("%Y-%m-%d")
+    
     # get reference to stock in question that we're trading on, define strike price at the top because we need it for contract definition
     stock = yf.Ticker(ticker=ticker)
-    strike_price = np.float64(strike_price_in[:-1][1:])
     
     # Handle all date stuff that we need in the function
-    exp_date_normal_format_string = datetime.strptime(exp_date, "%y%m%d").strftime("%Y-%m-%d")
-    exp_date_normal_format = datetime.strptime(exp_date, "%y%m%d")
     contract_date = datetime.strptime(date_purchased, "%m/%d/%y %I:%M%p")
-    is_expired = datetime.today() > exp_date_normal_format
+    is_expired = datetime.today() > exp_datetime_obj
     
     # grabs call or put data depending on input provided in strike price in by accessing the stocks option chain
-    option_type = 'calls' if 'c' in strike_price_in.lower() else 'puts' if 'p' in strike_price_in.lower() else None
-    option_frame = getattr(stock.option_chain(stock.options[stock.options.index(exp_date_normal_format_string)]), option_type)
+    option_frame = getattr(stock.option_chain(stock.options[stock.options.index(exp_date_string)]), option_type)
     
     # Gets a reference to the specific option contract that we want to get info for, downloads all historical data between purchase and expiration
-    contract = option_frame[option_frame['contractSymbol'].str.contains(exp_date) & np.isclose(option_frame['strike'], strike_price)]
+    contract = option_frame[option_frame['contractSymbol'].str.contains(exp_date_from_symbol) & np.isclose(option_frame['strike'], strike_price)]
     contract_symbol = contract['contractSymbol'].iloc[0]
-    hist_data = yf.download(contract['contractSymbol'].iloc[0], start=contract_date.date(), end=exp_date_normal_format.date())
+    hist_data = yf.download(contract['contractSymbol'].iloc[0], start=contract_date.date(), end=exp_datetime_obj.date())
     
     contract_price = np.float64(contract_price_in)
     volume = int(volume_in)
@@ -112,5 +124,3 @@ def options_data(date_purchased, ticker, strike_price_in, exp_date, contract_pri
         "high_post_buy":high_post_buy_dollar, "high_days_out":high_days_out, "percent_change_at_high":percent_change_at_high, "dollar_change_at_high":dollar_change_at_high
     }
     return output_dict.values()
-
-
