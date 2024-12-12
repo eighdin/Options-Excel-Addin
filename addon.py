@@ -196,14 +196,17 @@ def options_data(
 
 print(
     r"""
- _________  ___  ___  ________  ___       _______      
-|\___   ___\\  \|\  \|\   __  \|\  \     |\  ___ \     
-\|___ \  \_\ \  \\\  \ \  \|\  \ \  \    \ \   __/|    
-     \ \  \ \ \   __  \ \  \\\  \ \  \    \ \  \_|/__  
-      \ \  \ \ \  \ \  \ \  \\\  \ \  \____\ \  \_|\ \ 
-       \ \__\ \ \__\ \__\ \_______\ \_______\ \_______\
-        \|__|  \|__|\|__|\|_______|\|_______|\|_______|
-    v0.2
+                       /$$     /$$                                     /$$            /$$$$$$         
+                      | $$    |__/                                    |__/           /$$__  $$        
+  /$$$$$$   /$$$$$$  /$$$$$$   /$$  /$$$$$$  /$$$$$$$   /$$$$$$$       /$$ /$$$$$$$ | $$  \__//$$$$$$ 
+ /$$__  $$ /$$__  $$|_  $$_/  | $$ /$$__  $$| $$__  $$ /$$_____/      | $$| $$__  $$| $$$$   /$$__  $$
+| $$  \ $$| $$  \ $$  | $$    | $$| $$  \ $$| $$  \ $$|  $$$$$$       | $$| $$  \ $$| $$_/  | $$  \ $$
+| $$  | $$| $$  | $$  | $$ /$$| $$| $$  | $$| $$  | $$ \____  $$      | $$| $$  | $$| $$    | $$  | $$
+|  $$$$$$/| $$$$$$$/  |  $$$$/| $$|  $$$$$$/| $$  | $$ /$$$$$$$/      | $$| $$  | $$| $$    |  $$$$$$/
+ \______/ | $$____/    \___/  |__/ \______/ |__/  |__/|_______//$$$$$$|__/|__/  |__/|__/     \______/ 
+          | $$                                                |______/                                
+          | $$                                                                                        
+          |__/  v0.2
     """,
-    f"\n\ncache directory is in same directory as your spreadsheet. \n\n\tIt's called: {cache._directory}\n\nprobably don't touch it though, it'll mess up anything that expired and is still displaying info\n\n\nyou're welcome chase"
+    f"\n\ncache directory is in same directory as your spreadsheet. \n\n\tIt's called: {cache._directory}\n\nprobably don't touch it though, it'll mess up anything that expired and is still displaying info"
 )
