@@ -60,10 +60,11 @@ def options_data(
 ) -> str | float | int:
     """
     Returns a given options contract indicator, depending on input.
+    ______________________________________________________________________________________________________________________
     
-    ==================================================================================================================================
-    -------------------------------------------------------PARAMETERS-----------------------------------------------------------------
-    ==================================================================================================================================
+    ------------------------------------------------------------Parameters-------------------------------------------------------------------
+    ______________________________________________________________________________________________________________________
+    
         date_purchased (mm/dd/yy HH:MMam/pm): the date that the contract was purchased, formatted as shown
         contract_symbol (TSLA250221C00290000): example symbol provided, only accepts symbols in this format
         contract_price_in (69.69): price of the contract at purchase, please include the decimal, do not include any other symbols
@@ -84,9 +85,10 @@ def options_data(
             percent_eow_{1-5}: percent change at the end of the week from 1-5, works the same as price_eow_(1-5)
             high_post_buy: returns the highest value in dollars of the contract after purchase
             high_days_out: returns how many days out that high was
-            percent_change_at_high: percent change from initial purchase price to high price
-            dollar_change_at_high: dollar change from initial purchase price to high price
-    ==================================================================================================================================
+            percent_change_high: percent change from initial purchase price to high price
+            dollar_change_high: dollar change from initial purchase price to high price
+    ______________________________________________________________________________________________________________________
+    
     """
     parameters_dont_need_compute = [
         "date", "ticker", "strike_price", "exp_date", "contract_price", "volume", "total"
@@ -114,9 +116,7 @@ def options_data(
     strike_price = float(contract_symbol[-8:])/1000
     contract_price = np.float64(contract_price_in)
     volume = int(volume_in)
-    percent_change = (current_price-contract_price)/contract_price
     total = (contract_price*100)*volume
-    dollar_change = total*percent_change
     option_type_abbrev = contract_symbol[-9:][:1]
     option_type = 'calls' if option_type_abbrev.lower() == "c" else 'puts'
     exp_date_from_symbol = contract_symbol[ticker.__len__():ticker.__len__()+6]
@@ -125,11 +125,12 @@ def options_data(
     contract_datetime_obj = datetime.strptime(date_purchased, "%m/%d/%y %I:%M%p")
     is_expired = datetime.today() > exp_datetime_obj
     stock = yf.Ticker(ticker=ticker) # reference to stock that we're looking at
+    today_to_the_hour = datetime.strptime(datetime.today().strftime("%Y-%m-%d %I:00%p"), "%Y-%m-%d %I:00%p")
     
     if not doesnt_need_compute: # if needs compute
         if not is_expired:
             # grab all data for the stock from when it was purchased till today
-            hist_data = download_hist_info_cached(contract_symbol, start=contract_datetime_obj.date(), end=datetime.today())
+            hist_data = download_hist_info_cached(contract_symbol, start=contract_datetime_obj.date(), end=today_to_the_hour)
             # grabs call or put data depending on input provided in strike price in by accessing the stocks option chain
             option_frame = getattr(stock.option_chain(stock.options[stock.options.index(exp_date_string)]), option_type)
             # Gets a reference to the specific option contract that we want to get info for, downloads all historical data between purchase and expiration
@@ -140,6 +141,9 @@ def options_data(
             except:
                 return f"{contract_symbol} is expired and data is not cached! Please enter data manually."
         current_price = contract['lastPrice'].iloc[0] if not is_expired else hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
+        percent_change = (current_price-contract_price)/contract_price
+        dollar_change = total*percent_change
+
         # Calculates the price at the end of the weeks using historical data grabbed between when the contract was bought and sold
         # This only goes up to 5 right now, can add more later
         if want_out == "price_eow_1" or "percent_eow_1":
@@ -163,8 +167,8 @@ def options_data(
             high_post_buy_object = hist_data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
             high_post_buy_dollar = high_post_buy_object.iloc[0]
             high_days_out = (high_post_buy_object.name.date() - contract_datetime_obj.date()).days
-            percent_change_at_high = (high_post_buy_dollar-contract_price)/contract_price
-            dollar_change_at_high = total*percent_change_at_high
+            percent_change_high = (high_post_buy_dollar-contract_price)/contract_price
+            dollar_change_high = total*percent_change_high
     
     if is_expired and np.isclose(stored_price_exp, 0.0000):
         stored_price_exp = current_price
@@ -176,14 +180,19 @@ def options_data(
     percent_change_exp = stored_percent_change_exp
     dollar_change_exp = stored_dollar_change_exp
     
-    want_out_case = {
-        "date":date_purchased, "ticker":ticker, "strike_price":strike_price, "exp_date":exp_date_string, 
-        "contract_price":contract_price, "volume":volume, "total":total, "current_price":current_price, "percent_change":percent_change, "dollar_change":dollar_change, 
-        "price_eow_1":price_eow_1, "percent_eow_1":percent_eow_1, "price_eow_2":price_eow_2, "percent_eow_2":percent_eow_2, "price_eow_3":price_eow_3, "percent_eow_3":percent_eow_3, "price_eow_4":price_eow_4, "percent_eow_4":percent_eow_4, "price_eow_5":price_eow_5, "percent_eow_5":percent_eow_5,
-        "price_exp":price_exp, "percent_change_exp":percent_change_exp, "dollar_change_exp":dollar_change_exp,
-        "high_post_buy":high_post_buy_dollar, "high_days_out":high_days_out, "percent_change_at_high":percent_change_at_high, "dollar_change_at_high":dollar_change_at_high
-    }
-    return want_out_case[want_out]
+    # want_out_case = {
+    #     "date":date_purchased, "ticker":ticker, "strike_price":strike_price, "exp_date":exp_date_string, 
+    #     "contract_price":contract_price, "volume":volume, "total":total, "current_price":current_price, "percent_change":percent_change, "dollar_change":dollar_change, 
+    #     "price_eow_1":price_eow_1, "percent_eow_1":percent_eow_1, "price_eow_2":price_eow_2, "percent_eow_2":percent_eow_2, "price_eow_3":price_eow_3, "percent_eow_3":percent_eow_3, "price_eow_4":price_eow_4, "percent_eow_4":percent_eow_4, "price_eow_5":price_eow_5, "percent_eow_5":percent_eow_5,
+    #     "price_exp":price_exp, "percent_change_exp":percent_change_exp, "dollar_change_exp":dollar_change_exp,
+    #     "high_post_buy":high_post_buy_dollar, "high_days_out":high_days_out, "percent_change_at_high":percent_change_at_high, "dollar_change_at_high":dollar_change_at_high
+    # }
+    try:
+        return locals()[want_out]
+    except KeyError:
+        return f"Wrong key! ({want_out}) Check what you requested to get out of the function."
+    except Exception as e:
+        return f"Something went wrong! Idk, ask eighdin. ERROR: {e}"
 
 print(
     r"""
