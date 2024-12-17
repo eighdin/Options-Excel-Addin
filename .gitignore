@@ -1,2 +1,5 @@
-*.db*
 testingstuff.py
+__pycache__/*
+hist_cache/cache.db
+hist_cache/cache.db-shm
+hist_cache/cache.db-wal
