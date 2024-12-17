@@ -30,4 +30,4 @@ import addon
 # print(historical_data.iloc[historical_data.__len__()-1])
 #print(yf.Ticker(ticker).option_chain(exp_date.date().__str__()))
 
-print(addon.options_data("11/08/24 12:40pm", "TSLA250221C00290000", "54.96", "39600", "dollar_change_high"))
+print(addon.options_data("11/08/24 01:51pm","ALAB241220P00090000","3.94","2990", "ticker"))

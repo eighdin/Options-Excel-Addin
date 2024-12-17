@@ -71,7 +71,7 @@ def options_data(
         volume_in (2000): what is the volume of the contract purchased, whole number only
         
         want_out: what piece of data do you want? ONLY TAKES THESE VERY CASE AND TYPE SENSITIVE INPUTS:
-            date: returns the date purchased
+            contract_date: returns the date purchased
             ticker: returns the ticker of the contract
             strike_price: returns the strike price of the contract
             exp_date: returns the expiration date of the contract
@@ -123,6 +123,7 @@ def options_data(
     exp_datetime_obj = datetime.strptime(exp_date_from_symbol, "%y%m%d")
     exp_date_string = exp_datetime_obj.strftime("%Y-%m-%d")
     contract_datetime_obj = datetime.strptime(date_purchased, "%m/%d/%y %I:%M%p")
+    contract_date = contract_datetime_obj.strftime("%Y-%m-%d %I:%M%p")
     is_expired = datetime.today() > exp_datetime_obj
     stock = yf.Ticker(ticker=ticker) # reference to stock that we're looking at
     today_to_the_hour = datetime.strptime(datetime.today().strftime("%Y-%m-%d %I:00%p"), "%Y-%m-%d %I:00%p")
@@ -179,16 +180,10 @@ def options_data(
     price_exp = stored_price_exp
     percent_change_exp = stored_percent_change_exp
     dollar_change_exp = stored_dollar_change_exp
-    
-    # want_out_case = {
-    #     "date":date_purchased, "ticker":ticker, "strike_price":strike_price, "exp_date":exp_date_string, 
-    #     "contract_price":contract_price, "volume":volume, "total":total, "current_price":current_price, "percent_change":percent_change, "dollar_change":dollar_change, 
-    #     "price_eow_1":price_eow_1, "percent_eow_1":percent_eow_1, "price_eow_2":price_eow_2, "percent_eow_2":percent_eow_2, "price_eow_3":price_eow_3, "percent_eow_3":percent_eow_3, "price_eow_4":price_eow_4, "percent_eow_4":percent_eow_4, "price_eow_5":price_eow_5, "percent_eow_5":percent_eow_5,
-    #     "price_exp":price_exp, "percent_change_exp":percent_change_exp, "dollar_change_exp":dollar_change_exp,
-    #     "high_post_buy":high_post_buy_dollar, "high_days_out":high_days_out, "percent_change_at_high":percent_change_at_high, "dollar_change_at_high":dollar_change_at_high
-    # }
     try:
-        return locals()[want_out]
+        print(locals())
+        return_value = [locals().get(want_out)]
+        return return_value
     except KeyError:
         return f"Wrong key! ({want_out}) Check what you requested to get out of the function."
     except Exception as e:
