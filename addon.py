@@ -93,8 +93,7 @@ def options_data(
     parameters_dont_need_compute = [
         "date", "ticker", "strike_price", "exp_date", "contract_price", "volume", "total"
     ]
-    doesnt_need_compute = any(parameter in want_out for parameter in parameters_dont_need_compute)
-    
+    doesnt_need_compute = any(want_out in parameter for parameter in parameters_dont_need_compute)
     stored_nums = {
         "stored_eow_prices":{
             "stored_price_eow_1":0.0, 
@@ -129,18 +128,15 @@ def options_data(
     today_to_the_hour = datetime.strptime(datetime.today().strftime("%Y-%m-%d %I:00%p"), "%Y-%m-%d %I:00%p")
     
     if not doesnt_need_compute: # if needs compute
-        if not is_expired:
-            # grab all data for the stock from when it was purchased till today
+        # grab all data for the stock from when it was purchased till today
+        try:
             hist_data = download_hist_info_cached(contract_symbol, start=contract_datetime_obj.date(), end=today_to_the_hour)
-            # grabs call or put data depending on input provided in strike price in by accessing the stocks option chain
-            option_frame = getattr(stock.option_chain(stock.options[stock.options.index(exp_date_string)]), option_type)
-            # Gets a reference to the specific option contract that we want to get info for, downloads all historical data between purchase and expiration
-            contract = option_frame[contract_symbol.__contains__(exp_date_from_symbol) & np.isclose(option_frame['strike'], strike_price)]
-        else:
-            try:
-                hist_data = download_hist_info_cached(contract_symbol, start=contract_datetime_obj.date(), end=exp_datetime_obj.date())
-            except:
-                return f"{contract_symbol} is expired and data is not cached! Please enter data manually."
+        except:
+            return f"{contract_symbol} is expired and data is not cached! Please enter data manually."
+        # grabs call or put data depending on input provided in strike price in by accessing the stocks option chain
+        option_frame = getattr(stock.option_chain(stock.options[stock.options.index(exp_date_string)]), option_type)
+        # Gets a reference to the specific option contract that we want to get info for, downloads all historical data between purchase and expiration
+        contract = option_frame[contract_symbol.__contains__(exp_date_from_symbol) & np.isclose(option_frame['strike'], strike_price)]
         current_price = contract['lastPrice'].iloc[0] if not is_expired else hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
         percent_change = (current_price-contract_price)/contract_price
         dollar_change = total*percent_change
@@ -170,24 +166,26 @@ def options_data(
             high_days_out = (high_post_buy_object.name.date() - contract_datetime_obj.date()).days
             percent_change_high = (high_post_buy_dollar-contract_price)/contract_price
             dollar_change_high = total*percent_change_high
+        
+        if is_expired and want_out.__contains__("exp"):
+            if np.isclose(stored_price_exp, 0.0000):
+                stored_price_exp = current_price
+                stored_percent_change_exp = (stored_price_exp-contract_price)/contract_price
+                stored_dollar_change_exp = total*stored_percent_change_exp
+            price_exp = stored_price_exp
+            percent_change_exp = stored_percent_change_exp
+            dollar_change_exp = stored_dollar_change_exp
     
-    if is_expired and np.isclose(stored_price_exp, 0.0000):
-        stored_price_exp = current_price
-        price_exp = stored_price_exp
-        percent_change_exp = (price_exp-contract_price)/contract_price
-        dollar_change_exp = total*percent_change_exp
-    
-    price_exp = stored_price_exp
-    percent_change_exp = stored_percent_change_exp
-    dollar_change_exp = stored_dollar_change_exp
+    out_dict = {}
+    out_dict[want_out] = locals().get(want_out)
     try:
-        print(locals())
-        return_value = [locals().get(want_out)]
+        #print(locals())
+        return_value = str(out_dict[want_out])
         return return_value
     except KeyError:
         return f"Wrong key! ({want_out}) Check what you requested to get out of the function."
     except Exception as e:
-        return f"Something went wrong! Idk, ask eighdin. ERROR: {e}"
+        return f"Something went wrong! ERROR: {e}"
 
 print(
     r"""

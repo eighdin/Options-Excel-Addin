@@ -30,4 +30,7 @@ import addon
 # print(historical_data.iloc[historical_data.__len__()-1])
 #print(yf.Ticker(ticker).option_chain(exp_date.date().__str__()))
 
-print(addon.options_data("11/08/24 01:51pm","ALAB241220P00090000","3.94","2990", "ticker"))
+print(addon.options_data("11/08/24 01:51pm","ALAB241220P00090000","3.94","2990", "strike_price"))
+# print(
+#     yf.download("ALAB241220P00090000", "2024-11-08", datetime.today()+timedelta(days=10))
+# )
