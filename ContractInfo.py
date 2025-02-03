@@ -3,7 +3,9 @@ class ContractInfo:
         self.contract_Date = None
         self.ticker = None
         self.strike_Price = None
-        self.exp_Date = None
+        self.contract_Type = None
+        self.exp_Datetime_Obj = None
+        self.exp_Date_String = None
         self.contract_Price = None
         self.volume = None
         self.total = None
