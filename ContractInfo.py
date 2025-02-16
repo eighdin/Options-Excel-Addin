@@ -1,9 +1,11 @@
 class ContractInfo:
     def __init__(self):
         self.contract_Date = None
+        self.contract_Datetime_Obj = None
         self.ticker = None
         self.strike_Price = None
         self.contract_Type = None
+        self.exp_Date_From_Symbol = None
         self.exp_Datetime_Obj = None
         self.exp_Date_String = None
         self.contract_Price = None

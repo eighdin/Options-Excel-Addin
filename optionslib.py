@@ -2,10 +2,9 @@ from datetime import *
 import xlwings as xw
 import yfinance as yf
 import numpy as np
-import pandas as pd
 from diskcache import Cache
 import ContractInfo
-
+import timer
 contract_Info_Dict = {}
 # use vba to have current price and eow prices updated on a timer
 
@@ -24,10 +23,14 @@ def contract_init(
     if contract.strike_Price is None: # create strike price info if it doesn't exist
         contract.strike_Price = float(contract_symbol[-8:])/1000
         contract.contract_Type = contract_symbol[-9:][:1]
+    if contract.contract_Datetime_Obj is None:
+        contract.contract_Datetime_Obj = datetime.strptime(contract.contract_Date, "%m/%d/%y %I:%M%p")
     if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
-        exp_date_from_symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
-        contract.exp_Datetime_Obj = datetime.strptime(exp_date_from_symbol, "%y%m%d")
+        contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
+        contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
         contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
+    if contract.yf_Stock == None:
+        contract.yf_Stock = yf.Ticker(ticker=contract.ticker)
     return contract
 
 def get_Contract_Symbol(caller):
@@ -36,14 +39,24 @@ def get_Contract_Symbol(caller):
     value = sheet.cells(row, 1).value
     return value
 
+def fetch_curent_price(contract_symbol):
+    contract = contract_init(contract_symbol)
+    stock = yf.Ticker(contract.ticker)
+    hist_data = yf.download(contract_symbol, contract.contract_Datetime_Obj.date(), datetime.now())
+    option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
+    curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
+    current_price = curr_info['lastPrice'].iloc[0] if not (datetime.today() > contract.exp_Datetime_Obj.date()) else hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
+    contract.current_Price = current_price
+    return contract.current_Price
+
 @xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
     global refresh_rate 
-    if new_refresh_rate >= 60:
+    if new_refresh_rate > 15:
         refresh_rate = new_refresh_rate
         return f"Refresh rate set to: {new_refresh_rate} mins"
     else:
-        return f"Refresh rate must be > 60 mins!"
+        return f"Refresh rate must be > 15 mins!"
 
 # contract symbol should be first column always
 
@@ -103,6 +116,8 @@ def get_Total(caller):
 def get_Current_Price(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    
+    fetch_curent_price(contract_symbol)
     return contract.current_Price
 
 @xw.func()
