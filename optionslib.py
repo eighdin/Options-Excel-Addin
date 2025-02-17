@@ -4,9 +4,11 @@ import yfinance as yf
 import numpy as np
 from diskcache import Cache
 import ContractInfo
-import timer
+from threading import Timer
+
+# GLOBAL VARS
 contract_Info_Dict = {}
-# use vba to have current price and eow prices updated on a timer
+refresh_rate_mins = 60
 
 def contract_init(
     contract_symbol: str
@@ -51,9 +53,9 @@ def fetch_curent_price(contract_symbol):
 
 @xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
-    global refresh_rate 
+    global refresh_rate_mins
     if new_refresh_rate > 15:
-        refresh_rate = new_refresh_rate
+        refresh_rate_mins = new_refresh_rate
         return f"Refresh rate set to: {new_refresh_rate} mins"
     else:
         return f"Refresh rate must be > 15 mins!"
@@ -161,6 +163,3 @@ def get_Percent_Change_High(caller):
 @xw.func()
 def get_Dollar_Change_High(caller):
     contract_symbol = get_Contract_Symbol(caller)
-
-if datetime.now()-
-    
