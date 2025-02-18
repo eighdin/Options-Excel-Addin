@@ -4,7 +4,7 @@ import yfinance as yf
 import numpy as np
 from diskcache import Cache
 import ContractInfo
-from threading import Timer
+from RepeatTimer import RepeatTimer
 
 # GLOBAL VARS
 contract_Info_Dict = {}
