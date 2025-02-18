@@ -35,21 +35,38 @@ def contract_init(
         contract.yf_Stock = yf.Ticker(ticker=contract.ticker)
     return contract
 
-def get_Contract_Symbol(caller):
+def get_Contract_Symbol(caller) -> str:
     sheet = caller.sheet
     row = caller.row
     value = sheet.cells(row, 1).value
     return value
 
-def fetch_curent_price(contract_symbol):
+def fetch_curent_price(contract_symbol) -> float:
+    '''Fetches the current price of a contract, and if it's expired attempts to retrieve historical data'''
     contract = contract_init(contract_symbol)
     stock = yf.Ticker(contract.ticker)
-    hist_data = yf.download(contract_symbol, contract.contract_Datetime_Obj.date(), datetime.now())
-    option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
-    curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
-    current_price = curr_info['lastPrice'].iloc[0] if not (datetime.today() > contract.exp_Datetime_Obj.date()) else hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
-    contract.current_Price = current_price
+    if datetime.today() > contract.exp_Datetime_Obj.date():
+        try:
+            hist_data = yf.download(contract_symbol, contract.contract_Datetime_Obj.date(), datetime.now())
+            current_Price = hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
+        except Exception as e:
+            print(f'Err: Failed to get hist data for {contract_symbol}\n{e}')
+    else:
+        # this line uses getattr to get the option chain for the specified contract type in the contract object: stock.options[exp_date].call/put
+        option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
+        curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
+        current_Price = curr_info['lastPrice'].iloc[0]
+    contract.current_Price = current_Price
     return contract.current_Price
+
+def fetch_all_curr_prices() -> None:
+    '''Updates the current price for all contracts in the contract_Info_Dict'''
+    for symbol in contract_Info_Dict:
+        try:
+            print(f'Got current price of: {symbol} --- {fetch_curent_price(symbol)}')
+        except Exception as e:
+            print(f'Failed to retrieve current price of: {symbol}!')
+            print(f'Err: {e}')
 
 @xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
