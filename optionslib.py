@@ -18,21 +18,19 @@ def contract_init(
         Fills in the basic info that can be grabbed from the contract symbol.
     """
     if contract_Info_Dict.get(contract_symbol) is None:
-        contract_Info_Dict[contract_symbol] = ContractInfo()
+        contract_Info_Dict[contract_symbol] = ContractInfo.ContractInfo()
     contract = contract_Info_Dict[contract_symbol]
     if contract.ticker is None: # create ticker info if it doesn't exist
         contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
     if contract.strike_Price is None: # create strike price info if it doesn't exist
         contract.strike_Price = float(contract_symbol[-8:])/1000
         contract.contract_Type = contract_symbol[-9:][:1]
-    if contract.contract_Datetime_Obj is None:
+    if contract.contract_Datetime_Obj is None and contract.contract_Date is not None:
         contract.contract_Datetime_Obj = datetime.strptime(contract.contract_Date, "%m/%d/%y %I:%M%p")
     if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
         contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
         contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
         contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
-    if contract.yf_Stock == None:
-        contract.yf_Stock = yf.Ticker(ticker=contract.ticker)
     return contract
 
 def get_Contract_Symbol(caller) -> str:
@@ -45,7 +43,7 @@ def fetch_curent_price(contract_symbol) -> float:
     '''Fetches the current price of a contract, and if it's expired attempts to retrieve historical data'''
     contract = contract_init(contract_symbol)
     stock = yf.Ticker(contract.ticker)
-    if datetime.today() > contract.exp_Datetime_Obj.date():
+    if datetime.today().date() > contract.exp_Datetime_Obj.date():
         try:
             hist_data = yf.download(contract_symbol, contract.contract_Datetime_Obj.date(), datetime.now())
             current_Price = hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
