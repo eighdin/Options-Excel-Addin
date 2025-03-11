@@ -1,6 +1,6 @@
 from datetime import *
 import yfinance as yf
-import optionslib
+#import optionslib
 
 # my_ticker = yf.Ticker(ticker="NVDA")
 # option_frame = my_ticker.option_chain(my_ticker.options[0]).calls
@@ -37,7 +37,13 @@ import optionslib
 
 #print(optionslib.fetch_curent_price("TSLA250221C00290000"))
 ticker = yf.Ticker("TSLA")
+series = ticker.option_chain(ticker.options[ticker.options.index("2025-03-14")]).calls
 print(
-    ticker.history()
+    # ticker.option_chain(ticker.options[0])
+    series['lastTradeDate'].dt.date
 )
 
+# data = yf.download('TSLA250314C00100000', datetime.today().date() - timedelta(weeks=5), datetime.today().date())
+
+# LATEST PRICE
+# ticker.option_chain(ticker.options[ticker.options.index("2025-03-14")]).calls.iloc[0]['lastPrice']

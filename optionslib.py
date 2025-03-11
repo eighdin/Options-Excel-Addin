@@ -25,12 +25,14 @@ def contract_init(
     if contract.strike_Price is None: # create strike price info if it doesn't exist
         contract.strike_Price = float(contract_symbol[-8:])/1000
         contract.contract_Type = contract_symbol[-9:][:1]
-    if contract.contract_Datetime_Obj is None and contract.contract_Date is not None:
-        contract.contract_Datetime_Obj = datetime.strptime(contract.contract_Date, "%m/%d/%y %I:%M%p")
+    if contract.datetime_Obj is None and contract.date is not None:
+        contract.datetime_Obj = datetime.strptime(contract.date, "%m/%d/%y %I:%M%p")
     if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
         contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
         contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
         contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
+    if contract.datetime_Obj.date() > contract.exp_Datetime_Obj.date():
+        contract.is_Expired = True
     return contract
 
 def get_Contract_Symbol(caller) -> str:
@@ -45,7 +47,7 @@ def fetch_curent_price(contract_symbol) -> float:
     stock = yf.Ticker(contract.ticker)
     if datetime.today().date() > contract.exp_Datetime_Obj.date():
         try:
-            hist_data = yf.download(contract_symbol, contract.contract_Datetime_Obj.date(), datetime.now())
+            hist_data = yf.download(contract_symbol, contract.datetime_Obj.date(), datetime.now())
             current_Price = hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
         except Exception as e:
             print(f'Err: Failed to get hist data for {contract_symbol}\n{e}')
@@ -63,8 +65,28 @@ def fetch_all_curr_prices() -> None:
         try:
             print(f'Got current price of: {symbol} --- {fetch_curent_price(symbol)}')
         except Exception as e:
-            print(f'Failed to retrieve current price of: {symbol}!')
-            print(f'Err: {e}')
+            print(f'Failed to retrieve current price of: {symbol}!\nErr: {e}')
+
+def days_until_friday(
+    date: datetime
+) -> int:
+    # Get the current weekday (0=Monday, 1=Tuesday, ..., 6=Sunday)
+    current_weekday = date.weekday()
+    
+    # Calculate how many days until Friday (4)
+    days_until_friday = (4 - current_weekday) % 7
+    
+    return days_until_friday
+
+def get_friday_from_date(
+    start_date: datetime, 
+    which_friday: int
+) -> datetime:
+    first_friday = start_date + timedelta(days=days_until_friday(start_date))
+    nth_friday = first_friday + timedelta(weeks=which_friday-1)
+    return nth_friday
+
+timer_obj = RepeatTimer(refresh_rate_mins, fetch_all_curr_prices)
 
 @xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
@@ -81,7 +103,7 @@ def set_Refresh_Rate_Mins(new_refresh_rate):
 def set_Contract_Date(contract_date, caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
-    contract.contract_Date = contract_date
+    contract.date = contract_date
     return contract_date
 
 @xw.func()
@@ -112,8 +134,8 @@ def get_Exp_Date(caller):
 def set_Contract_Price(contract_price, caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
-    contract.contract_Price = contract_price
-    return contract.contract_Price
+    contract.orig_Price = contract_price
+    return contract.orig_Price
 
 @xw.func()
 def set_Volume(volume, caller):
@@ -126,55 +148,91 @@ def set_Volume(volume, caller):
 def get_Total(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
-    contract.total = (contract.contract_Price*100)*contract.volume
+    contract.total = (contract.orig_Price*100)*contract.volume
     return contract.total
 
 @xw.func()
 def get_Current_Price(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
-    
-    fetch_curent_price(contract_symbol)
+    if contract.current_Price is None or np.isclose(0):
+        fetch_curent_price(contract_symbol)
     return contract.current_Price
 
 @xw.func()
 def get_Percent_Change(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
-    return (contract.current_Price-contract.contract_Price)/contract.contract_Price
+    return (contract.current_Price-contract.orig_Price)/contract.orig_Price
 
 @xw.func()
 def get_Dollar_Change(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
+    contract.dollar_Change = (contract.current_Price-contract.orig_Price)/contract.orig_Price
+    return contract.dollar_Change
 
 @xw.func()
 def get_Price_EOW(n_week, caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
+    prices_EOW = contract.price_EOW_List
+    friday_Datetime = get_friday_from_date(contract.datetime_Obj, n_week)
+    if datetime.today().date() >= friday_Datetime.date():
+        prices_EOW[n_week]
+    else:
+        return "N/A"
 
 @xw.func()
 def get_Percent_EOW(n_week, caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_Percent_Change_Exp(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_Dollar_Change_Exp(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_High_Post_Buy(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_High_Days_Out(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_Percent_Change_High(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
 
 @xw.func()
 def get_Dollar_Change_High(caller):
     contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
+
+
+print(
+    r"""
+
+
+                       /$$     /$$                                     /$$ /$$ /$$      
+                      | $$    |__/                                    | $$|__/| $$      
+  /$$$$$$   /$$$$$$  /$$$$$$   /$$  /$$$$$$  /$$$$$$$   /$$$$$$$      | $$ /$$| $$$$$$$ 
+ /$$__  $$ /$$__  $$|_  $$_/  | $$ /$$__  $$| $$__  $$ /$$_____/      | $$| $$| $$__  $$
+| $$  \ $$| $$  \ $$  | $$    | $$| $$  \ $$| $$  \ $$|  $$$$$$       | $$| $$| $$  \ $$
+| $$  | $$| $$  | $$  | $$ /$$| $$| $$  | $$| $$  | $$ \____  $$      | $$| $$| $$  | $$
+|  $$$$$$/| $$$$$$$/  |  $$$$/| $$|  $$$$$$/| $$  | $$ /$$$$$$$/      | $$| $$| $$$$$$$/
+ \______/ | $$____/    \___/  |__/ \______/ |__/  |__/|_______//$$$$$$|__/|__/|_______/ 
+          | $$                                                |______/                  
+          | $$                                                                          
+          |__/   v1.0a1
+    """
+    )
