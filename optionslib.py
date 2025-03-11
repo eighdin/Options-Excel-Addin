@@ -24,9 +24,9 @@ def contract_init(
         contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
     if contract.strike_Price is None: # create strike price info if it doesn't exist
         contract.strike_Price = float(contract_symbol[-8:])/1000
-        contract.contract_Type = contract_symbol[-9:][:1]
-    if contract.datetime_Obj is None and contract.date is not None:
-        contract.datetime_Obj = datetime.strptime(contract.date, "%m/%d/%y %I:%M%p")
+        contract.contract_Type = "calls" if contract_symbol[-9:][:1].lower() == "c" else "puts"
+    if contract.contract_Datetime_Obj is None and contract.contract_Date is not None:
+        contract.contract_Datetime_Obj = datetime.strptime(contract.contract_Date, "%m/%d/%y %I:%M%p")
     if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
         contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
         contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
