@@ -3,11 +3,13 @@ import xlwings as xw
 import yfinance as yf
 import numpy as np
 from diskcache import Cache
+
 import ContractInfo
 from RepeatTimer import RepeatTimer
 
+cache = Cache() # define cache that I use to cache the contract dict every time the prices are fetched
 # GLOBAL VARS
-contract_Info_Dict = {}
+contract_Info_Dict = cache.get('contract_Dict', {})
 refresh_rate_mins = 60
 
 def contract_init(
@@ -20,6 +22,7 @@ def contract_init(
     if contract_Info_Dict.get(contract_symbol) is None:
         contract_Info_Dict[contract_symbol] = ContractInfo.ContractInfo()
     contract = contract_Info_Dict[contract_symbol]
+    
     if contract.ticker is None: # create ticker info if it doesn't exist
         contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
     if contract.strike_Price is None: # create strike price info if it doesn't exist
@@ -45,19 +48,17 @@ def fetch_curent_price(contract_symbol) -> float:
     '''Fetches the current price of a contract, and if it's expired attempts to retrieve historical data'''
     contract = contract_init(contract_symbol)
     stock = yf.Ticker(contract.ticker)
-    if datetime.today().date() > contract.exp_Datetime_Obj.date():
+    if datetime.today().date() < contract.exp_Datetime_Obj.date():
         try:
-            hist_data = yf.download(contract_symbol, contract.datetime_Obj.date(), datetime.now())
-            current_Price = hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
+            option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
+            curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
+            current_Price = curr_info['lastPrice'].iloc[0]
+            contract.current_Price = current_Price
+            return contract.current_Price
         except Exception as e:
-            print(f'Err: Failed to get hist data for {contract_symbol}\n{e}')
+            print(f'Err: Failed to get current price for {contract_symbol}\n{e}')
     else:
-        # this line uses getattr to get the option chain for the specified contract type in the contract object: stock.options[exp_date].call/put
-        option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
-        curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
-        current_Price = curr_info['lastPrice'].iloc[0]
-    contract.current_Price = current_Price
-    return contract.current_Price
+        return f"EXP"
 
 def fetch_all_curr_prices() -> None:
     '''Updates the current price for all contracts in the contract_Info_Dict'''
@@ -66,6 +67,20 @@ def fetch_all_curr_prices() -> None:
             print(f'Got current price of: {symbol} --- {fetch_curent_price(symbol)}')
         except Exception as e:
             print(f'Failed to retrieve current price of: {symbol}!\nErr: {e}')
+    cache.set('contract_Dict', contract_Info_Dict) # cache the contract info dictionary for use if the spreadsheet gets closed
+
+def fetch_price_Exp(contract_symbol) -> float:
+    contract = contract_init(contract_symbol)
+    if datetime.today().date() > contract.exp_Datetime_Obj.date():
+        if contract.price_Exp == None:
+            try:
+                hist_data = yf.download(contract_symbol, start=contract.exp_Datetime_Obj.date()-2, end=contract.exp_Datetime_Obj.date()+1)
+                contract.price_Exp= hist_data['Close'].iloc[hist_data.__len__()-1].iloc[0]
+            except Exception as e:
+                print(f'Failed to get exp price for contract: {contract_symbol}\n{e}')
+        return contract.price_Exp
+    else:
+        return "N/A"
 
 def days_until_friday(
     date: datetime
@@ -91,11 +106,11 @@ timer_obj = RepeatTimer(refresh_rate_mins, fetch_all_curr_prices)
 @xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
     global refresh_rate_mins
-    if new_refresh_rate > 15:
+    if new_refresh_rate > 30:
         refresh_rate_mins = new_refresh_rate
         return f"Refresh rate set to: {new_refresh_rate} mins"
     else:
-        return f"Refresh rate must be > 15 mins!"
+        return f"Refresh rate must be > 30 mins!"
 
 # contract symbol should be first column always
 
@@ -179,7 +194,11 @@ def get_Price_EOW(n_week, caller):
     prices_EOW = contract.price_EOW_List
     friday_Datetime = get_friday_from_date(contract.datetime_Obj, n_week)
     if datetime.today().date() >= friday_Datetime.date():
-        prices_EOW[n_week]
+        if prices_EOW[n_week] == None:
+            contract_Data = yf.download(contract_symbol, start=friday_Datetime.date(), end=friday_Datetime.date()+1)
+            prices_EOW[n_week] = contract_Data['Close'][contract_symbol].iloc[0]
+        else:
+            return prices_EOW[n_week]
     else:
         return "N/A"
 
@@ -187,16 +206,45 @@ def get_Price_EOW(n_week, caller):
 def get_Percent_EOW(n_week, caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    percents_EOW = contract.percent_EOW_List
+    prices_EOW = contract.price_EOW_List
+    if prices_EOW[n_week] != None: # should only return true once price exists, which should only be once that friday has passed
+        percents_EOW[n_week] = (prices_EOW[n_week]-contract.orig_Price)/contract.orig_Price
+        return percents_EOW[n_week]
+    else:
+        return "N/A"
+
+@xw.func()
+def get_Price_At_Exp(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
+    if datetime.today().date() > contract.exp_Datetime_Obj.date():
+        return fetch_price_Exp(contract_symbol)
 
 @xw.func()
 def get_Percent_Change_Exp(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    if contract.price_Exp is not None:
+        contract_Price = contract.orig_Price
+        price_Exp = contract.price_Exp
+        if contract.percent_Change_Exp is None:
+            contract.percent_Change_Exp = (price_Exp-contract_Price)/contract_Price
+        return contract.percent_Change_Exp
+    else:
+        return "N/A"
 
 @xw.func()
 def get_Dollar_Change_Exp(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    if contract.percent_Change_Exp is not None:
+        if contract.dollar_Change_Exp is None:
+            contract.dollar_Change_Exp = contract.total * contract.percent_Change_Exp
+        return contract.dollar_Change_Exp
+    else:
+        return "N/A"
+
 
 @xw.func()
 def get_High_Post_Buy(caller):

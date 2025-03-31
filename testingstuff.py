@@ -35,15 +35,19 @@ import yfinance as yf
 #     yf.download("ALAB241220P00090000", "2024-11-08", datetime.today()+timedelta(days=10))
 # )
 
-#print(optionslib.fetch_curent_price("TSLA250221C00290000"))
+contract_symbol = "TSLA250328C00100000"
 ticker = yf.Ticker("TSLA")
-series = ticker.option_chain(ticker.options[ticker.options.index("2025-03-14")]).calls
-print(
-    # ticker.option_chain(ticker.options[0])
-    series['lastTradeDate'].dt.date
-)
+series = ticker.option_chain(ticker.options[ticker.options.index("2025-04-11")]).calls
+#series[series['contractSymbol'] == contract_symbol].loc[0] # grabs the object in the option calls with all of the information for the contract
 
-# data = yf.download('TSLA250314C00100000', datetime.today().date() - timedelta(weeks=5), datetime.today().date())
+data = yf.download(contract_symbol, start=(datetime.today().date() - timedelta(days=6)))
+
+print(
+    data['Close']['TSLA250328C00100000'].iloc[0]
+)
 
 # LATEST PRICE
 # ticker.option_chain(ticker.options[ticker.options.index("2025-03-14")]).calls.iloc[0]['lastPrice']
+
+# extra logic that can be used for grabbing lastdate info
+# series[series['lastTradeDate'].dt.date == datetime.today().date() - timedelta(days=6)]
