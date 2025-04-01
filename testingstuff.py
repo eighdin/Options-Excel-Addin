@@ -40,10 +40,13 @@ ticker = yf.Ticker("TSLA")
 series = ticker.option_chain(ticker.options[ticker.options.index("2025-04-11")]).calls
 #series[series['contractSymbol'] == contract_symbol].loc[0] # grabs the object in the option calls with all of the information for the contract
 
-data = yf.download(contract_symbol, start=(datetime.today().date() - timedelta(days=6)))
+#data = yf.download(contract_symbol, start=(datetime.today().date() - timedelta(days=6)))
 
+hist_Data = yf.download(contract_symbol, start=datetime.today()-timedelta(days=30), end=datetime.today().date())
+high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
+number = high_Obj
 print(
-    data['Close']['TSLA250328C00100000'].iloc[0]
+    number
 )
 
 # LATEST PRICE

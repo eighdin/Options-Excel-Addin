@@ -2,6 +2,7 @@ from datetime import *
 import xlwings as xw
 import yfinance as yf
 import numpy as np
+from pandas import DataFrame
 from diskcache import Cache
 
 import ContractInfo
@@ -60,15 +61,6 @@ def fetch_curent_price(contract_symbol) -> float:
     else:
         return f"EXP"
 
-def fetch_all_curr_prices() -> None:
-    '''Updates the current price for all contracts in the contract_Info_Dict'''
-    for symbol in contract_Info_Dict:
-        try:
-            print(f'Got current price of: {symbol} --- {fetch_curent_price(symbol)}')
-        except Exception as e:
-            print(f'Failed to retrieve current price of: {symbol}!\nErr: {e}')
-    cache.set('contract_Dict', contract_Info_Dict) # cache the contract info dictionary for use if the spreadsheet gets closed
-
 def fetch_price_Exp(contract_symbol) -> float:
     contract = contract_init(contract_symbol)
     if datetime.today().date() > contract.exp_Datetime_Obj.date():
@@ -81,6 +73,34 @@ def fetch_price_Exp(contract_symbol) -> float:
         return contract.price_Exp
     else:
         return "N/A"
+
+def fetch_High_Data(contract_symbol) -> int:
+    contract = contract_init(contract_symbol)
+    if (datetime.today().date() - contract.high_Day_Last_Refreshed.date()) > 1:
+        contract.high_Day_Last_Refreshed = datetime.today()
+        hist_Data = yf.download(contract_symbol, start=contract.datetime_Obj.date(), end=datetime.today().date())
+        high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
+        contract.high_Post_Buy = high_Obj.iloc[0]
+        contract.high_Days_Out = (high_Obj.name.date() - contract.datetime_Obj.date()).days
+        contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
+        contract.dollar_Change_High = contract.total*contract.percent_Change_High
+        
+        return 1
+    else:
+        return 0
+
+def refresh_Func() -> None:
+    '''Updates values for all contracts in the contract_Info_Dict, called by repeat timer object'''
+    for symbol in contract_Info_Dict:
+        try:
+            curr_price = fetch_curent_price(symbol)
+            print(f'Got current price of {symbol}: {curr_price:.2f}')
+            
+            high_Data_Obj = fetch_High_Data(symbol)
+            
+        except Exception as e:
+            print(f'Failed to retrieve refresh info for: {symbol}!\nErr: {e}')
+    cache.set('contract_Dict', contract_Info_Dict) # cache the contract info dictionary for use if the spreadsheet gets closed
 
 def days_until_friday(
     date: datetime
@@ -101,10 +121,14 @@ def get_friday_from_date(
     nth_friday = first_friday + timedelta(weeks=which_friday-1)
     return nth_friday
 
-timer_obj = RepeatTimer(refresh_rate_mins, fetch_all_curr_prices)
+# timer to fetch all prices for every refresh rate in mins
+timer_Obj = RepeatTimer(refresh_rate_mins, refresh_Func)
 
+# ====================================================================================================================================================#
+# START OF EXCEL USER DEFINED FUNCTIONS (UDFs)
+# ====================================================================================================================================================#
 @xw.func()
-def set_Refresh_Rate_Mins(new_refresh_rate):
+def set_current_price_Refresh_Rate_Mins(new_refresh_rate):
     global refresh_rate_mins
     if new_refresh_rate > 30:
         refresh_rate_mins = new_refresh_rate
@@ -250,21 +274,25 @@ def get_Dollar_Change_Exp(caller):
 def get_High_Post_Buy(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    return contract.high_Post_Buy
 
 @xw.func()
 def get_High_Days_Out(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    return contract.high_Days_Out
 
 @xw.func()
 def get_Percent_Change_High(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    return contract.percent_Change_High
 
 @xw.func()
 def get_Dollar_Change_High(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
+    return contract.dollar_Change_High
 
 
 print(
@@ -281,6 +309,6 @@ print(
  \______/ | $$____/    \___/  |__/ \______/ |__/  |__/|_______//$$$$$$|__/|__/|_______/ 
           | $$                                                |______/                  
           | $$                                                                          
-          |__/   v1.0a1
+          |__/   v1.0a2
     """
     )
