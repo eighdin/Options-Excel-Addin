@@ -127,6 +127,7 @@ timer_Obj = RepeatTimer(refresh_rate_mins, refresh_Func)
 # ====================================================================================================================================================#
 # START OF EXCEL USER DEFINED FUNCTIONS (UDFs)
 # ====================================================================================================================================================#
+
 @xw.func()
 def set_current_price_Refresh_Rate_Mins(new_refresh_rate):
     global refresh_rate_mins
