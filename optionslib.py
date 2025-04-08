@@ -11,10 +11,11 @@ from RepeatTimer import RepeatTimer
 cache = Cache() # define cache that I use to cache the contract dict every time the prices are fetched
 # GLOBAL VARS
 contract_Info_Dict = cache.get('contract_Dict', {})
-refresh_rate_mins = 60
+refresh_rate_mins = 30
 
 def contract_init(
-    contract_symbol: str
+    contract_symbol: str,
+    date_in : str = None
 ) -> ContractInfo:
     """
         Returns the contract object relating to the passed in contract symbol after creating it, if needed.
@@ -26,15 +27,18 @@ def contract_init(
     
     if contract.ticker is None: # create ticker info if it doesn't exist
         contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
-    if contract.strike_Price is None: # create strike price info if it doesn't exist
+    if contract.strike_Price == 0: # create strike price info if it doesn't exist
         contract.strike_Price = float(contract_symbol[-8:])/1000
         contract.contract_Type = "calls" if contract_symbol[-9:][:1].lower() == "c" else "puts"
-    if contract.contract_Datetime_Obj is None and contract.contract_Date is not None:
-        contract.contract_Datetime_Obj = datetime.strptime(contract.contract_Date, "%m/%d/%y %I:%M%p")
+    if contract.datetime_Obj is None and date_in is not None:
+        contract.date = date_in
+        contract.datetime_Obj = datetime.strptime(contract.date, "%m/%d/%y %I:%M%p")
     if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
         contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
         contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
         contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
+    if contract.high_Day_Last_Refreshed is None:
+        contract.high_Day_Last_Refreshed = datetime.today() - timedelta(days=1)
     if contract.datetime_Obj.date() > contract.exp_Datetime_Obj.date():
         contract.is_Expired = True
     return contract
@@ -95,11 +99,15 @@ def refresh_Func() -> None:
         try:
             curr_price = fetch_curent_price(symbol)
             print(f'Got current price of {symbol}: {curr_price:.2f}')
-            
-            high_Data_Obj = fetch_High_Data(symbol)
-            
         except Exception as e:
-            print(f'Failed to retrieve refresh info for: {symbol}!\nErr: {e}')
+            print(f'Failed to retrieve current price for: {symbol}!\nErr: {e}')
+        
+        try:
+            fetch_High_Data(symbol)
+            print(f'Got high data of {symbol}')
+        except Exception as e:
+            print(f'Failed to retrieve high data for: {symbol}!\nErr: {e}')
+        
     cache.set('contract_Dict', contract_Info_Dict) # cache the contract info dictionary for use if the spreadsheet gets closed
 
 def days_until_friday(
@@ -129,7 +137,7 @@ timer_Obj = RepeatTimer(refresh_rate_mins, refresh_Func)
 # ====================================================================================================================================================#
 
 @xw.func()
-def set_current_price_Refresh_Rate_Mins(new_refresh_rate):
+def set_Refresh_Rate_Mins(new_refresh_rate):
     global refresh_rate_mins
     if new_refresh_rate > 30:
         refresh_rate_mins = new_refresh_rate
@@ -141,14 +149,18 @@ def set_current_price_Refresh_Rate_Mins(new_refresh_rate):
 
 @xw.func()
 def set_Contract_Date(contract_date, caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    contract.date = contract_date
-    return contract_date
+    """expects contract date in format:%m/%d/%y %I:%M%p"""
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol, date_in=contract_date)
+        return contract.date
+    except Exception as e:
+        print(f"Error setting contract date: {e}")
+        return f"Error!"
 
 @xw.func()
 def get_Ticker(caller):
-    contract_symbol = caller.offset(0, -2).value
+    contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
     return contract.ticker
 
@@ -160,22 +172,34 @@ def get_Strike_Price(caller):
     400C
     where the strike price is 400 dollars and it is a call
     """
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    return f'{contract.strike_Price}{contract.contract_Type}'
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        return f'{contract.strike_Price:.0f}{"C" if contract.contract_Type == "calls" else "P"}'
+    except Exception as e:
+        print(f"Error getting strike price!\n{e}")
 
 @xw.func()
 def get_Exp_Date(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    return contract.exp_Date_String
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        return datetime.strftime(contract.exp_Datetime_Obj, "%m/%d/%y")
+    except Exception as e:
+        print(f'Error getting exp date!\n{e}')
+        return "Error! Check console!"
 
 @xw.func()
 def set_Contract_Price(contract_price, caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    contract.orig_Price = contract_price
-    return contract.orig_Price
+    """Expects contract price in """
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        contract.orig_Price = np.float64(contract_price)
+        return f'${contract.orig_Price:.2f}'
+    except Exception as e:
+        print(f'Error setting contract price!\n{e}')
+        return "Error setting contract price! Check console."
 
 @xw.func()
 def set_Volume(volume, caller):
@@ -193,39 +217,63 @@ def get_Total(caller):
 
 @xw.func()
 def get_Current_Price(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    if contract.current_Price is None or np.isclose(0):
-        fetch_curent_price(contract_symbol)
-    return contract.current_Price
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        if np.isclose(0, contract.current_Price):
+            fetch_curent_price(contract_symbol)
+        return contract.current_Price
+    except Exception as e:
+        print(e)
+        return("Error! Check console!")
 
 @xw.func()
 def get_Percent_Change(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    return (contract.current_Price-contract.orig_Price)/contract.orig_Price
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        if not contract.is_Expired:
+            contract.percent_Change =  (contract.current_Price-contract.orig_Price)/contract.orig_Price
+            return contract.percent_Change
+        else:
+            return "Expired!"
+    except Exception as e:
+        print(f'Error getting percent change!\n{e}')
+        return "Error!"
 
 @xw.func()
 def get_Dollar_Change(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    contract.dollar_Change = (contract.current_Price-contract.orig_Price)/contract.orig_Price
-    return contract.dollar_Change
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        if not contract.is_Expired:
+            contract.dollar_Change = contract.total*contract.percent_Change
+            return contract.dollar_Change
+        else:
+            return "Expired!"
+    except Exception as e:
+        if contract.percent_Change == None:
+            print(f"MISSING PERCENT CHANGE FOR {contract_symbol}!!!!")
+        return "Error!"
 
 @xw.func()
 def get_Price_EOW(n_week, caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    prices_EOW = contract.price_EOW_List
-    friday_Datetime = get_friday_from_date(contract.datetime_Obj, n_week)
-    if datetime.today().date() >= friday_Datetime.date():
-        if prices_EOW[n_week] == None:
-            contract_Data = yf.download(contract_symbol, start=friday_Datetime.date(), end=friday_Datetime.date()+1)
-            prices_EOW[n_week] = contract_Data['Close'][contract_symbol].iloc[0]
+    try:
+        contract_symbol = get_Contract_Symbol(caller)
+        contract = contract_init(contract_symbol)
+        prices_EOW = contract.price_EOW_List
+        friday_Datetime = get_friday_from_date(contract.datetime_Obj, n_week)
+        if datetime.today().date() >= friday_Datetime.date():
+            if prices_EOW[n_week] == None:
+                contract_Data = yf.download(contract_symbol, start=friday_Datetime.date(), end=friday_Datetime.date()+1)
+                prices_EOW[n_week] = contract_Data['Close'][contract_symbol].iloc[0]
+            else:
+                return prices_EOW[n_week]
         else:
-            return prices_EOW[n_week]
-    else:
-        return "N/A"
+            return "N/A"
+    except Exception as e:
+        print(f"Error getting price eow!\n{e}")
+        return "Error!"
 
 @xw.func()
 def get_Percent_EOW(n_week, caller):
@@ -295,8 +343,8 @@ def get_Dollar_Change_High(caller):
     contract = contract_init(contract_symbol)
     return contract.dollar_Change_High
 
-
-print(
+if __name__ == '__main__':
+    print(
     r"""
 
 
@@ -313,3 +361,4 @@ print(
           |__/   v1.0a2
     """
     )
+    xw.serve()

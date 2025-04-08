@@ -8,7 +8,7 @@ class ContractInfo:
         
         # general info
         self.ticker : str = None
-        self.strike_Price : int = None
+        self.strike_Price : int = 0
         self.contract_Type : str = None
         
         # exp date info
@@ -22,12 +22,12 @@ class ContractInfo:
         self.dollar_Change_Exp : float = None
         
         # basic price info
-        self.orig_Price : float = None
-        self.volume : int = None
-        self.total : float = None
-        self.current_Price : float = None
-        self.percent_Change : float = None
-        self.dollar_Change : float = None
+        self.orig_Price : float = 0
+        self.volume : int = 0
+        self.total : float = 0
+        self.current_Price : float = 0
+        self.percent_Change : float = 0
+        self.dollar_Change : float = 0
         
         # EOW lists
         self.price_EOW_List : list = []
