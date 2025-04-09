@@ -30,15 +30,15 @@ class ContractInfo:
         self.dollar_Change : float = 0
         
         # EOW lists
-        self.price_EOW_List : list = []
-        self.percent_EOW_List : list = []
+        self.price_EOW_List : list = [0,0,0,0,0]
+        self.percent_EOW_List : list = [0,0,0,0,0]
         
         # high price values
         self.high_Day_Last_Refreshed : datetime = None
         self.high_Post_Buy : float = 0
-        self.high_Days_Out : float= None
-        self.percent_Change_High : float = None
-        self.dollar_Change_High : float = None
+        self.high_Days_Out : float= 0
+        self.percent_Change_High : float = 0
+        self.dollar_Change_High : float = 0
         
         # duh
         self.is_Expired : bool = False
