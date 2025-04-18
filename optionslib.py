@@ -307,7 +307,7 @@ def get_Price_EOW(n_week, caller):
             if not np.isclose(price_EOW, 0):
                 return price_EOW
             else:
-                print(f"No cached EOW {n_week} value for expired contract: {contract_symbol}, returning N/A\n")
+                print(f"No cached EOW {n_week} value for expired contract: {contract_symbol}, returning N/A")
                 return "N/A"
     except Exception as e:
         print(f"Error getting price eow!\n{e}\n")
