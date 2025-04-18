@@ -17,7 +17,7 @@ class RepeatTimer:
 
     def start(self):
         if not self.is_running:
-            self._timer = Timer(self.interval, self._run)
+            self._timer = Timer(self.interval*60, self._run) # if *60 is missing, i had it set that way for testing
             self._timer.start()
             self.is_running = True
 

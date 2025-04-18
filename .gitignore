@@ -2,3 +2,4 @@ testingstuff.py
 __pycache__/*
 hist_cache/*
 *.xlsm
+cache_dir/*
