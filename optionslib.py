@@ -229,7 +229,7 @@ def get_Total(caller):
         return "Error!"
 
 @xw.func()
-def get_Current_Price(caller) -> float | str:
+def get_Current_Price(caller):
     """
     Returns last cached current price.
     If not expired and no current price stored, gets that number from yf. 
