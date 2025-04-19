@@ -1,3 +1,5 @@
-testingstuff.py
+testing/*
 __pycache__/*
 hist_cache/*
+*.xlsm
+cache_dir/*
