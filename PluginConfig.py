@@ -5,7 +5,7 @@ class PluginConfig:
     
     def __init__(self):
         # MUTABLE CONFIG VALUES
-        self.refresh_rate_mins = 60 
+        self.refresh_rate_mins = 10
         self.min_refresh_rate_mins = 1 
         
     # CONFIG FOR CONTRACT INFO OBJECT IS INSIDE THAT FILE, BECAUSE I'M LAZY

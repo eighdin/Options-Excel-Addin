@@ -11,9 +11,36 @@ from PluginConfig import PluginConfig
 config = PluginConfig()
 cache = Cache(
         'cache_dir',
-        disk_min_file_size=0
+        disk_min_file_size=0,
+        size_limit=1073741824,
+        cull_limit=100000
     ) # define cache that I use to cache the contract dict every time the prices are fetched
-contract_Info_Dict: dict[str, ContractInfo] = cache.get('contract_Dict', {})
+
+print(
+r"""
+
+
+                       /$$     /$$                                     /$$ /$$ /$$      
+                      | $$    |__/                                    | $$|__/| $$      
+  /$$$$$$   /$$$$$$  /$$$$$$   /$$  /$$$$$$  /$$$$$$$   /$$$$$$$      | $$ /$$| $$$$$$$ 
+ /$$__  $$ /$$__  $$|_  $$_/  | $$ /$$__  $$| $$__  $$ /$$_____/      | $$| $$| $$__  $$
+| $$  \ $$| $$  \ $$  | $$    | $$| $$  \ $$| $$  \ $$|  $$$$$$       | $$| $$| $$  \ $$
+| $$  | $$| $$  | $$  | $$ /$$| $$| $$  | $$| $$  | $$ \____  $$      | $$| $$| $$  | $$
+|  $$$$$$/| $$$$$$$/  |  $$$$/| $$|  $$$$$$/| $$  | $$ /$$$$$$$/      | $$| $$| $$$$$$$/
+\______/ | $$____/    \___/  |__/ \______/ |__/  |__/|_______//$$$$$$|__/|__/|_______/ 
+         | $$                                                |______/                  
+         | $$                                                                          
+         |__/   v1.0
+"""
+)
+
+def update_cache(contract_obj: ContractInfo, symbol: str):
+    if contract_obj is not None:
+        contract_Dict: dict[str, ContractInfo] = cache.get('contract_Dict', {})
+        contract_Dict[symbol] = contract_obj
+        cache.set('contract_Dict', contract_Dict)
+    else:
+        print("Didn't update cache with empty contract object.")
 
 def contract_init(
     contract_symbol: str,
@@ -23,32 +50,35 @@ def contract_init(
         Returns the contract object relating to the passed in contract symbol after creating it, if needed.
         Fills in the basic info that can be grabbed from the contract symbol.
     """
-    if contract_Info_Dict.get(contract_symbol) is None:
-        contract_Info_Dict[contract_symbol] = ContractInfo()
-    contract = contract_Info_Dict[contract_symbol]
+    contract_Dict: dict[str, ContractInfo] = cache.get('contract_Dict', {})
+    if contract_Dict.get(contract_symbol) is None:
+        contract_Dict[contract_symbol] = ContractInfo()
+    contract = contract_Dict[contract_symbol]
     
-    if contract.ticker is None: # create ticker info if it doesn't exist
-        contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
-    if contract.strike_Price is None: # create strike price info if it doesn't exist
-        contract.strike_Price = float(contract_symbol[-8:])/1000
-        contract.contract_Type = "calls" if contract_symbol[-9:][:1].lower() == "c" else "puts"
-    if contract.datetime_Obj is None and date_in is not None:
-        contract.date = date_in
-        contract.datetime_Obj = datetime.strptime(contract.date, "%m/%d/%y %I:%M%p")
-    if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
-        contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
-        contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
-        contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
-    if contract.high_Day_Last_Refreshed is None:
-        contract.high_Day_Last_Refreshed = contract.datetime_Obj
-    if contract.high_Post_Buy is None:
-        contract.high_Post_Buy = contract.orig_Price
-        contract.high_Days_Out = 0
-        contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
-        contract.dollar_Change_High = contract.total*contract.percent_Change_High
-    if datetime.today().date() > contract.exp_Datetime_Obj.date():
-        contract.is_Expired = True
-    return contract
+    try:
+        if contract.ticker is None: # create ticker info if it doesn't exist
+            contract.ticker = "".join(filter(lambda x: not x.isdigit(), contract_symbol[:6]))
+        if contract.strike_Price is None: # create strike price info if it doesn't exist
+            contract.strike_Price = float(contract_symbol[-8:])/1000
+            contract.contract_Type = "calls" if contract_symbol[-9:][:1].lower() == "c" else "puts"
+        if contract.datetime_Obj is None and date_in is not None:
+            contract.date = date_in
+            contract.datetime_Obj = datetime.strptime(contract.date, "%m/%d/%y %I:%M%p")
+            contract.high_Day_Last_Refreshed = contract.datetime_Obj # set last day refreshed to the day the contract was bought so that it'll only refresh starting the day after
+        if contract.exp_Datetime_Obj is None: # create expiration date information if it doesn't exist
+            contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
+            contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
+            contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
+        if contract.high_Post_Buy is None and not (contract.orig_Price,contract.total).__contains__(None): # set initial values for high if they're not set yet
+            contract.high_Post_Buy = contract.orig_Price
+            contract.high_Days_Out = 0
+            contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
+            contract.dollar_Change_High = contract.total*contract.percent_Change_High
+        if datetime.today().date() > contract.exp_Datetime_Obj.date():
+            contract.is_Expired = True
+        return contract
+    except Exception as e:
+        print(f"Error in contract init!\n{e}\n")
 
 def get_Contract_Symbol(caller) -> str:
     sheet = caller.sheet
@@ -56,21 +86,21 @@ def get_Contract_Symbol(caller) -> str:
     value = sheet.cells(row, 1).value
     return value
 
-def fetch_curent_price(contract_symbol) -> float:
-    '''Fetches the current price of a contract, and if it's expired attempts to retrieve historical data'''
+def fetch_curent_price(contract_symbol) -> ContractInfo:
+    '''Fetches the current price of a contract, and if it's expired attempts to retrieve historical data. Returns contract info object w current price updated'''
     contract = contract_init(contract_symbol)
     stock = yf.Ticker(contract.ticker)
-    if datetime.today().date() < contract.exp_Datetime_Obj.date():
-        try:
+    try:
+        if datetime.today().date() < contract.exp_Datetime_Obj.date():
             option_frame = getattr(stock.option_chain(stock.options[stock.options.index(contract.exp_Date_String)]), contract.contract_Type)
             curr_info = option_frame[contract_symbol.__contains__(contract.exp_Date_From_Symbol) & np.isclose(option_frame['strike'], contract.strike_Price)]
             current_Price = curr_info['lastPrice'].iloc[0]
             contract.current_Price = current_Price
-            return contract.current_Price
-        except Exception as e:
+        return contract
+    except Exception as e:
             print(f'Err: Failed to get current price for {contract_symbol}\n{e}\n')
-    else:
-        return contract.current_Price if contract.current_Price is not None else 0.0 # returns 0.0 if no cached value for current price and expired
+    finally:
+        update_cache(contract, contract_symbol)
 
 def fetch_price_Exp(contract_symbol) -> float:
     contract = contract_init(contract_symbol)
@@ -85,6 +115,7 @@ def fetch_price_Exp(contract_symbol) -> float:
                     contract.price_Exp = contract.current_Price
                 else:
                     contract.price_Exp = 0.0
+        update_cache(contract, contract_symbol)
         return contract.price_Exp
     else:
         return "N/A"
@@ -92,29 +123,33 @@ def fetch_price_Exp(contract_symbol) -> float:
 def fetch_High_Data(contract_symbol):
     contract = contract_init(contract_symbol)
     try:
-        if (datetime.today().date() - contract.high_Day_Last_Refreshed.date()).days >= 1 or contract.current_Price > contract.high_Post_Buy: # if its been at least one day since high data was retrieved, retrieve it
-            contract.high_Day_Last_Refreshed = datetime.today()
-            hist_Data = yf.download(contract_symbol, start=contract.datetime_Obj, end=datetime.today())
-            high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
-            contract.high_Post_Buy = high_Obj.iloc[0]
-            contract.high_Days_Out = (high_Obj.name.date() - contract.datetime_Obj.date()).days
-            contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
-            contract.dollar_Change_High = contract.total*contract.percent_Change_High
+        if not (contract.total, contract.orig_Price).__contains__(None):
+            if (datetime.today().date() - contract.high_Day_Last_Refreshed.date()).days >= 1 or contract.current_Price > contract.high_Post_Buy: # if its been at least one day since high data was retrieved, retrieve it
+                contract.high_Day_Last_Refreshed = datetime.today()
+                hist_Data = yf.download(contract_symbol, start=contract.datetime_Obj, end=datetime.today())
+                high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
+                contract.high_Post_Buy = high_Obj.iloc[0]
+                contract.high_Days_Out = (high_Obj.name.date() - contract.datetime_Obj.date()).days
+                contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
+                contract.dollar_Change_High = contract.total*contract.percent_Change_High
+        else:
+            print("Failed to fetch high data! Missing data")
     except Exception as e:
         print(f"Error getting high data!\n{e}\n")
+    finally:
+        update_cache(contract, contract_symbol)
 
 def refresh_Func() -> None:
     '''Updates values for all contracts in the contract_Info_Dict, called by repeat timer object'''
-    for symbol, contract in contract_Info_Dict.items():
+    contract_Dict: dict[str, ContractInfo] = cache.get('contract_Dict')
+    for symbol, contract in contract_Dict.items():
         if not contract.is_Expired:
             try:
-                fetch_curent_price(symbol)
-                fetch_High_Data(symbol)
+                fetch_curent_price(symbol) # updates cache inside this method
+                fetch_High_Data(symbol) # updates cache inside this method
                 print(f"Refreshed data for {symbol}")
             except Exception as e:
                 print(f'Failed to refresh data for: {symbol}!\nErr: {e}')
-            finally:
-                cache.set('contract_Dict', contract_Info_Dict) # cache the contract info dictionary
 
 def days_until_friday(
     date: datetime
@@ -142,7 +177,7 @@ timer_Obj = RepeatTimer(config.refresh_rate_mins, refresh_Func)
 # START OF EXCEL USER DEFINED FUNCTIONS (UDFs)
 # ====================================================================================================================================================#
 
-@xw.func()
+@xw.func(volatile=True)
 def set_Refresh_Rate_Mins(new_refresh_rate):
     if new_refresh_rate > config.min_refresh_rate_mins:
         config.refresh_rate_mins = new_refresh_rate
@@ -152,95 +187,106 @@ def set_Refresh_Rate_Mins(new_refresh_rate):
 
 # contract symbol should be first column always
 
-@xw.func()
+@xw.func(volatile=True)
 def set_Contract_Date(contract_date, caller):
     """expects contract date in format:%m/%d/%y %I:%M%p"""
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol, date_in=contract_date)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol, date_in=contract_date)
         return contract.date
     except Exception as e:
         print(f"Error setting contract date: {e}")
         return f"Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Ticker(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
     return contract.ticker
 
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Strike_Price(caller):
     """
     returns the strike price and the contract type in this format:
     400C
     where the strike price is 400 dollars and it is a call
     """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         return f'{contract.strike_Price:.0f}{"C" if contract.contract_Type == "calls" else "P"}'
     except Exception as e:
         print(f"Error getting strike price!\n{e}\n")
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Exp_Date(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         return datetime.strftime(contract.exp_Datetime_Obj, "%m/%d/%y")
     except Exception as e:
         print(f'Error getting exp date!\n{e}\n')
         return "Error! Check console!"
 
-@xw.func()
+@xw.func(volatile=True)
 def set_Contract_Price(contract_price, caller):
     """Expects contract price in """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         contract.orig_Price = np.float64(contract_price)
         return contract.orig_Price
     except Exception as e:
         print(f'Error setting contract price!\n{e}\n')
         return "Error setting contract price! Check console."
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def set_Volume(volume, caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         contract.volume = volume
-        return volume
+        return contract.volume
     except Exception as e:
         print(f"Error setting volume for {contract_symbol}!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Total(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
-        contract.total = (contract.orig_Price*100)*contract.volume
-        return contract.total
+        if contract.orig_Price is not None:
+            contract.total = (contract.orig_Price*100)*contract.volume
+            return contract.total
+        else:
+            return "Set contract price!"
     except Exception as e:
         print(f'Error getting total! (issue is probably one of the values not being set)\n{e}\n')
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Current_Price(caller):
     """
     Returns last cached current price.
     If not expired and no current price stored, gets that number from yf. 
     if expired, otherwise returns "EXP". 
     """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if not contract.is_Expired:
             if contract.current_Price is None:
-                fetch_curent_price(contract_symbol)
+                contract = fetch_curent_price(contract_symbol)
             return contract.current_Price
         else:
             if contract.current_Price is None:
@@ -250,45 +296,74 @@ def get_Current_Price(caller):
     except Exception as e:
         print(f"Error getting current price!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Percent_Change(caller):
+    """
+    Returns the percent change of the contract from original price to current price if cached or not expired.
+    If expired and no cached value returns Expired!
+    Otherwise, returns cached value.
+    """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if not contract.is_Expired:
-            if contract.current_Price != None:
+            if contract.current_Price is not None and contract.orig_Price is not None:
                 contract.percent_Change =  (contract.current_Price-contract.orig_Price)/contract.orig_Price
                 return contract.percent_Change
             else:
                 return "Current price is None!"
         else:
-            return "Expired!"
+            if contract.percent_Change is not None:
+                return contract.percent_Change
+            else:
+                return "Expired!"
     except Exception as e:
         print(f'Error getting percent change!\n{e}\n')
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Dollar_Change(caller):
+    """
+    Returns the dollar change of the contract if cached or not expired.
+    If expired and no cached value returns Expired!
+    Otherwise, returns cached value.
+    """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if not contract.is_Expired:
-            contract.dollar_Change = contract.total*contract.percent_Change
-            return contract.dollar_Change
+            if contract.percent_Change is not None:
+                contract.dollar_Change = contract.total*contract.percent_Change
+                return contract.dollar_Change
+            else:
+                return "Percent change not calculated"
         else:
-            return "Expired!"
+            if contract.dollar_Change is not None:
+                return contract.dollar_Change
+            else:
+                return "Expired!"
     except Exception as e:
-        if contract.percent_Change == None:
-            print(f"MISSING PERCENT CHANGE FOR {contract_symbol}!!!!")
+        print(f"Error getting dollar change!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Price_EOW(n_week, caller):
+    """
+    Returns the price of the contract at the end of n_week from when it was bought
+    Returns N/A if not that week yet
+    Returns EXP if no cached value and expired
+    """
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
         n_week = int(n_week)
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         prices_EOW = contract.price_EOW_List
         price_EOW = prices_EOW[n_week-1] # -1 because zero index
         if not contract.is_Expired:
@@ -307,13 +382,14 @@ def get_Price_EOW(n_week, caller):
             if not np.isclose(price_EOW, 0):
                 return price_EOW
             else:
-                print(f"No cached EOW {n_week} value for expired contract: {contract_symbol}, returning N/A")
-                return "N/A"
+                return "EXP"
     except Exception as e:
         print(f"Error getting price eow!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Percent_EOW(n_week, caller):
     try:
         n_week = int(n_week)
@@ -331,12 +407,14 @@ def get_Percent_EOW(n_week, caller):
     except Exception as e:
         print(f'Error getting percentage EOW {n_week}!!!\n{e}\n')
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Price_At_Exp(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if datetime.today().date() > contract.exp_Datetime_Obj.date():
             return fetch_price_Exp(contract_symbol)
         else:
@@ -344,12 +422,14 @@ def get_Price_At_Exp(caller):
     except Exception as e:
         print(f"Error getting price at exp!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Percent_Change_Exp(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if contract.price_Exp is not None:
             contract_Price = contract.orig_Price
             price_Exp = contract.price_Exp
@@ -361,12 +441,14 @@ def get_Percent_Change_Exp(caller):
     except Exception as e:
         print(f"Error getting percent change at exp!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Dollar_Change_Exp(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if contract.percent_Change_Exp is not None:
             if contract.dollar_Change_Exp is None:
                 contract.dollar_Change_Exp = contract.total * contract.percent_Change_Exp
@@ -376,32 +458,38 @@ def get_Dollar_Change_Exp(caller):
     except Exception as e:
         print(f"Error getting dollar change at exp!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_High_Post_Buy(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         return contract.high_Post_Buy
     except Exception as e:
         print(f"Error getting high post buy!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_High_Days_Out(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         return contract.high_Days_Out
     except Exception as e:
         print(f"Error getting high days out!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Percent_Change_High(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if contract.percent_Change_High is not None:
             return contract.percent_Change_High
         else:
@@ -409,12 +497,14 @@ def get_Percent_Change_High(caller):
     except Exception as e:
         print(f"Error getting percent change high!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
-@xw.func()
+@xw.func(volatile=True)
 def get_Dollar_Change_High(caller):
+    contract_symbol = get_Contract_Symbol(caller)
+    contract = contract_init(contract_symbol)
     try:
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
         if contract.dollar_Change_High is not None:
             return contract.dollar_Change_High
         else:
@@ -422,23 +512,8 @@ def get_Dollar_Change_High(caller):
     except Exception as e:
         print(f"Error getting dollar change high!\n{e}\n")
         return "Error!"
+    finally:
+        update_cache(contract, contract_symbol)
 
 if __name__ == '__main__':
-    print(
-    r"""
-
-
-                       /$$     /$$                                     /$$ /$$ /$$      
-                      | $$    |__/                                    | $$|__/| $$      
-  /$$$$$$   /$$$$$$  /$$$$$$   /$$  /$$$$$$  /$$$$$$$   /$$$$$$$      | $$ /$$| $$$$$$$ 
- /$$__  $$ /$$__  $$|_  $$_/  | $$ /$$__  $$| $$__  $$ /$$_____/      | $$| $$| $$__  $$
-| $$  \ $$| $$  \ $$  | $$    | $$| $$  \ $$| $$  \ $$|  $$$$$$       | $$| $$| $$  \ $$
-| $$  | $$| $$  | $$  | $$ /$$| $$| $$  | $$| $$  | $$ \____  $$      | $$| $$| $$  | $$
-|  $$$$$$/| $$$$$$$/  |  $$$$/| $$|  $$$$$$/| $$  | $$ /$$$$$$$/      | $$| $$| $$$$$$$/
- \______/ | $$____/    \___/  |__/ \______/ |__/  |__/|_______//$$$$$$|__/|__/|_______/ 
-          | $$                                                |______/                  
-          | $$                                                                          
-          |__/   v1.0
-    """
-    )
     xw.serve()
