@@ -69,11 +69,9 @@ def contract_init(
             contract.exp_Date_From_Symbol = contract_symbol[contract.ticker.__len__():contract.ticker.__len__()+6]
             contract.exp_Datetime_Obj = datetime.strptime(contract.exp_Date_From_Symbol, "%y%m%d")
             contract.exp_Date_String = contract.exp_Datetime_Obj.strftime("%Y-%m-%d")
-        if contract.high_Post_Buy is None and not (contract.orig_Price,contract.total).__contains__(None): # set initial values for high if they're not set yet
+        if contract.high_Post_Buy is None: # set initial values for high if they're not set yet
             contract.high_Post_Buy = contract.orig_Price
             contract.high_Days_Out = 0
-            contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
-            contract.dollar_Change_High = contract.total*contract.percent_Change_High
         if datetime.today().date() > contract.exp_Datetime_Obj.date():
             contract.is_Expired = True
         return contract
@@ -130,8 +128,9 @@ def fetch_High_Data(contract_symbol):
                 high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
                 contract.high_Post_Buy = high_Obj.iloc[0]
                 contract.high_Days_Out = (high_Obj.name.date() - contract.datetime_Obj.date()).days
-                contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
-                contract.dollar_Change_High = contract.total*contract.percent_Change_High
+                # COMMENTED OUT BC CELL FORMULAS
+                # contract.percent_Change_High = (contract.high_Post_Buy-contract.orig_Price)/contract.orig_Price
+                # contract.dollar_Change_High = contract.total*contract.percent_Change_High
         else:
             print("Failed to fetch high data! Missing data")
     except Exception as e:
@@ -177,17 +176,18 @@ timer_Obj = RepeatTimer(config.refresh_rate_mins, refresh_Func)
 # START OF EXCEL USER DEFINED FUNCTIONS (UDFs)
 # ====================================================================================================================================================#
 
-@xw.func(volatile=True)
+@xw.func()
 def set_Refresh_Rate_Mins(new_refresh_rate):
     if new_refresh_rate > config.min_refresh_rate_mins:
         config.refresh_rate_mins = new_refresh_rate
+        print(config.refresh_rate_mins)
         return f"Refresh rate set to: {new_refresh_rate} mins"
     else:
         return f"Refresh rate must be > {config.min_refresh_rate_mins} mins!"
 
 # contract symbol should be first column always
 
-@xw.func(volatile=True)
+@xw.func()
 def set_Contract_Date(contract_date, caller):
     """expects contract date in format:%m/%d/%y %I:%M%p"""
     contract_symbol = get_Contract_Symbol(caller)
@@ -200,14 +200,14 @@ def set_Contract_Date(contract_date, caller):
     finally:
         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
+@xw.func()
 def get_Ticker(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
     return contract.ticker
 
 
-@xw.func(volatile=True)
+@xw.func()
 def get_Strike_Price(caller):
     """
     returns the strike price and the contract type in this format:
@@ -221,7 +221,7 @@ def get_Strike_Price(caller):
     except Exception as e:
         print(f"Error getting strike price!\n{e}\n")
 
-@xw.func(volatile=True)
+@xw.func()
 def get_Exp_Date(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
@@ -231,7 +231,8 @@ def get_Exp_Date(caller):
         print(f'Error getting exp date!\n{e}\n')
         return "Error! Check console!"
 
-@xw.func(volatile=True)
+# DONT NEED BC CELL FORMULAS
+@xw.func()
 def set_Contract_Price(contract_price, caller):
     """Expects contract price in """
     contract_symbol = get_Contract_Symbol(caller)
@@ -245,34 +246,34 @@ def set_Contract_Price(contract_price, caller):
     finally:
         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def set_Volume(volume, caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        contract.volume = volume
-        return contract.volume
-    except Exception as e:
-        print(f"Error setting volume for {contract_symbol}!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func()
+# def set_Volume(volume, caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         contract.volume = volume
+#         return contract.volume
+#     except Exception as e:
+#         print(f"Error setting volume for {contract_symbol}!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Total(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if contract.orig_Price is not None:
-            contract.total = (contract.orig_Price*100)*contract.volume
-            return contract.total
-        else:
-            return "Set contract price!"
-    except Exception as e:
-        print(f'Error getting total! (issue is probably one of the values not being set)\n{e}\n')
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func()
+# def get_Total(caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if contract.orig_Price is not None:
+#             contract.total = (contract.orig_Price*100)*contract.volume
+#             return contract.total
+#         else:
+#             return "Set contract price!"
+#     except Exception as e:
+#         print(f'Error getting total! (issue is probably one of the values not being set)\n{e}\n')
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
 @xw.func(volatile=True)
 def get_Current_Price(caller):
@@ -299,59 +300,60 @@ def get_Current_Price(caller):
     finally:
         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Percent_Change(caller):
-    """
-    Returns the percent change of the contract from original price to current price if cached or not expired.
-    If expired and no cached value returns Expired!
-    Otherwise, returns cached value.
-    """
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if not contract.is_Expired:
-            if contract.current_Price is not None and contract.orig_Price is not None:
-                contract.percent_Change =  (contract.current_Price-contract.orig_Price)/contract.orig_Price
-                return contract.percent_Change
-            else:
-                return "Current price is None!"
-        else:
-            if contract.percent_Change is not None:
-                return contract.percent_Change
-            else:
-                return "Expired!"
-    except Exception as e:
-        print(f'Error getting percent change!\n{e}\n')
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# DONT NEED BC CELL FORMULAS
+# @xw.func(volatile=True)
+# def get_Percent_Change(caller):
+#     """
+#     Returns the percent change of the contract from original price to current price if cached or not expired.
+#     If expired and no cached value returns Expired!
+#     Otherwise, returns cached value.
+#     """
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if not contract.is_Expired:
+#             if contract.current_Price is not None and contract.orig_Price is not None:
+#                 contract.percent_Change =  (contract.current_Price-contract.orig_Price)/contract.orig_Price
+#                 return contract.percent_Change
+#             else:
+#                 return "Current price is None!"
+#         else:
+#             if contract.percent_Change is not None:
+#                 return contract.percent_Change
+#             else:
+#                 return "Expired!"
+#     except Exception as e:
+#         print(f'Error getting percent change!\n{e}\n')
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Dollar_Change(caller):
-    """
-    Returns the dollar change of the contract if cached or not expired.
-    If expired and no cached value returns Expired!
-    Otherwise, returns cached value.
-    """
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if not contract.is_Expired:
-            if contract.percent_Change is not None:
-                contract.dollar_Change = contract.total*contract.percent_Change
-                return contract.dollar_Change
-            else:
-                return "Percent change not calculated"
-        else:
-            if contract.dollar_Change is not None:
-                return contract.dollar_Change
-            else:
-                return "Expired!"
-    except Exception as e:
-        print(f"Error getting dollar change!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func(volatile=True)
+# def get_Dollar_Change(caller):
+#     """
+#     Returns the dollar change of the contract if cached or not expired.
+#     If expired and no cached value returns Expired!
+#     Otherwise, returns cached value.
+#     """
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if not contract.is_Expired:
+#             if contract.percent_Change is not None:
+#                 contract.dollar_Change = contract.total*contract.percent_Change
+#                 return contract.dollar_Change
+#             else:
+#                 return "Percent change not calculated"
+#         else:
+#             if contract.dollar_Change is not None:
+#                 return contract.dollar_Change
+#             else:
+#                 return "Expired!"
+#     except Exception as e:
+#         print(f"Error getting dollar change!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
 @xw.func(volatile=True)
 def get_Price_EOW(n_week, caller):
@@ -389,26 +391,27 @@ def get_Price_EOW(n_week, caller):
     finally:
         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Percent_EOW(n_week, caller):
-    try:
-        n_week = int(n_week)
-        contract_symbol = get_Contract_Symbol(caller)
-        contract = contract_init(contract_symbol)
-        percents_EOW = contract.percent_EOW_List
-        prices_EOW = contract.price_EOW_List
-        price_EOW = prices_EOW[n_week-1] # zero index
-        if not np.isclose(price_EOW, 0): # should only return true once price exists, which should only be once that friday has passed
-            percents_EOW[n_week-1] = (price_EOW-contract.orig_Price)/contract.orig_Price
-            return percents_EOW[n_week-1]
-        else:
-            return "N/A"
-                
-    except Exception as e:
-        print(f'Error getting percentage EOW {n_week}!!!\n{e}\n')
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+
+# THIS COMMENTED OUT BC USING CELL FORMULAS INSTEAD
+# @xw.func(volatile=True)
+# def get_Percent_EOW(n_week, caller):
+#     try:
+#         n_week = int(n_week)
+#         contract_symbol = get_Contract_Symbol(caller)
+#         contract = contract_init(contract_symbol)
+#         percents_EOW = contract.percent_EOW_List
+#         prices_EOW = contract.price_EOW_List
+#         price_EOW = prices_EOW[n_week-1] # zero index
+#         if not np.isclose(price_EOW, 0): # should only return true once price exists, which should only be once that friday has passed
+#             percents_EOW[n_week-1] = (price_EOW-contract.orig_Price)/contract.orig_Price
+#             return percents_EOW[n_week-1]
+#         else:
+#             return "N/A"
+#     except Exception as e:
+#         print(f'Error getting percentage EOW {n_week}!!!\n{e}\n')
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
 @xw.func(volatile=True)
 def get_Price_At_Exp(caller):
@@ -416,57 +419,62 @@ def get_Price_At_Exp(caller):
     contract = contract_init(contract_symbol)
     try:
         if datetime.today().date() > contract.exp_Datetime_Obj.date():
-            return fetch_price_Exp(contract_symbol)
+            if contract.current_Price not in (0, None):
+                return contract.current_Price # return last stored current price
+            else:
+                return "No stored values"
         else:
             return "N/A"
     except Exception as e:
         print(f"Error getting price at exp!\n{e}\n")
         return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Percent_Change_Exp(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if contract.price_Exp is not None:
-            contract_Price = contract.orig_Price
-            price_Exp = contract.price_Exp
-            if contract.percent_Change_Exp is None:
-                contract.percent_Change_Exp = (price_Exp-contract_Price)/contract_Price
-            return contract.percent_Change_Exp
-        else:
-            return "N/A"
-    except Exception as e:
-        print(f"Error getting percent change at exp!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# DON'T NEED BC CELL FORMULAS
+# @xw.func(volatile=True)
+# def get_Percent_Change_Exp(caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if contract.price_Exp is not None:
+#             contract_Price = contract.orig_Price
+#             price_Exp = contract.price_Exp
+#             if contract.percent_Change_Exp is None:
+#                 contract.percent_Change_Exp = (price_Exp-contract_Price)/contract_Price
+#             return contract.percent_Change_Exp
+#         else:
+#             return "N/A"
+#     except Exception as e:
+#         print(f"Error getting percent change at exp!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Dollar_Change_Exp(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if contract.percent_Change_Exp is not None:
-            if contract.dollar_Change_Exp is None:
-                contract.dollar_Change_Exp = contract.total * contract.percent_Change_Exp
-            return contract.dollar_Change_Exp
-        else:
-            return "N/A"
-    except Exception as e:
-        print(f"Error getting dollar change at exp!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func(volatile=True)
+# def get_Dollar_Change_Exp(caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if contract.percent_Change_Exp is not None:
+#             if contract.dollar_Change_Exp is None:
+#                 contract.dollar_Change_Exp = contract.total * contract.percent_Change_Exp
+#             return contract.dollar_Change_Exp
+#         else:
+#             return "N/A"
+#     except Exception as e:
+#         print(f"Error getting dollar change at exp!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
 @xw.func(volatile=True)
 def get_High_Post_Buy(caller):
     contract_symbol = get_Contract_Symbol(caller)
     contract = contract_init(contract_symbol)
     try:
-        return contract.high_Post_Buy
+        if contract.high_Post_Buy in (None, 0):
+            return "NO DATA"
+        else:
+            return contract.high_Post_Buy
     except Exception as e:
         print(f"Error getting high post buy!\n{e}\n")
         return "Error!"
@@ -485,35 +493,35 @@ def get_High_Days_Out(caller):
     finally:
         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Percent_Change_High(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if contract.percent_Change_High is not None:
-            return contract.percent_Change_High
-        else:
-            return "Missing high data!"
-    except Exception as e:
-        print(f"Error getting percent change high!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func(volatile=True)
+# def get_Percent_Change_High(caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if contract.percent_Change_High is not None:
+#             return contract.percent_Change_High
+#         else:
+#             return "Missing high data!"
+#     except Exception as e:
+#         print(f"Error getting percent change high!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
-@xw.func(volatile=True)
-def get_Dollar_Change_High(caller):
-    contract_symbol = get_Contract_Symbol(caller)
-    contract = contract_init(contract_symbol)
-    try:
-        if contract.dollar_Change_High is not None:
-            return contract.dollar_Change_High
-        else:
-            return "Missing high data!"
-    except Exception as e:
-        print(f"Error getting dollar change high!\n{e}\n")
-        return "Error!"
-    finally:
-        update_cache(contract, contract_symbol)
+# @xw.func(volatile=True)
+# def get_Dollar_Change_High(caller):
+#     contract_symbol = get_Contract_Symbol(caller)
+#     contract = contract_init(contract_symbol)
+#     try:
+#         if contract.dollar_Change_High is not None:
+#             return contract.dollar_Change_High
+#         else:
+#             return "Missing high data!"
+#     except Exception as e:
+#         print(f"Error getting dollar change high!\n{e}\n")
+#         return "Error!"
+#     finally:
+#         update_cache(contract, contract_symbol)
 
 if __name__ == '__main__':
     xw.serve()
