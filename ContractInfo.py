@@ -4,6 +4,7 @@ from typing import List, Optional
 
 EOW_LIST_SIZE = 5 
 
+# anything commented out is no longer needed
 @dataclass
 class ContractInfo():
     # Date stuff for contract
@@ -22,16 +23,16 @@ class ContractInfo():
     
     #exp price info
     price_Exp : Optional[float] = None
-    percent_Change_Exp : Optional[float] = None
-    dollar_Change_Exp : Optional[float] = None
+    # percent_Change_Exp : Optional[float] = None
+    # dollar_Change_Exp : Optional[float] = None
     
     # basic price info
     orig_Price : Optional[float] = None
-    volume : Optional[int] = None
-    total : Optional[float] = None
+    # volume : Optional[int] = None
+    # total : Optional[float] = None
     current_Price : Optional[float] = None
-    percent_Change : Optional[float] = None
-    dollar_Change : Optional[float] = None
+    # percent_Change : Optional[float] = None
+    # dollar_Change : Optional[float] = None
     
     # EOW lists
     price_EOW_List : List[float] = field(default_factory=lambda: [0.0]*EOW_LIST_SIZE)
@@ -41,8 +42,8 @@ class ContractInfo():
     high_Day_Last_Refreshed : Optional[datetime.datetime] = None
     high_Post_Buy : Optional[float] = None
     high_Days_Out : Optional[float]= None
-    percent_Change_High : Optional[float] = None
-    dollar_Change_High : Optional[float] = None
+    # percent_Change_High : Optional[float] = None
+    # dollar_Change_High : Optional[float] = None
     
     # duh
     is_Expired : bool = False
