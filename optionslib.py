@@ -35,6 +35,7 @@ if not _already_printed_logo:
              |__/   v2.0
     """
     )
+    _already_printed_logo = True
 
 def update_cache(contract_obj: ContractInfo, symbol: str):
     if contract_obj is not None:
