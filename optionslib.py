@@ -16,8 +16,7 @@ cache = Cache(
         cull_limit=100000
     ) # define cache that I use to cache the contract dict every time the prices are fetched
 
-_already_printed_logo = False
-if not _already_printed_logo:
+if not config.already_printed_logo:
     print(
     r"""
 
@@ -35,7 +34,7 @@ if not _already_printed_logo:
              |__/   v2.0
     """
     )
-    _already_printed_logo = True
+    config.already_printed_logo = True
 
 def update_cache(contract_obj: ContractInfo, symbol: str):
     if contract_obj is not None:

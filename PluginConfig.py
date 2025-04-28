@@ -7,5 +7,6 @@ class PluginConfig:
         # MUTABLE CONFIG VALUES
         self.refresh_rate_mins = 10
         self.min_refresh_rate_mins = 1 
+        self.already_printed_logo = False
         
     # CONFIG FOR CONTRACT INFO OBJECT IS INSIDE THAT FILE, BECAUSE I'M LAZY
