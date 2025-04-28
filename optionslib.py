@@ -126,7 +126,7 @@ def fetch_High_Data(contract_symbol):
         if not (contract.total, contract.orig_Price).__contains__(None):
             if (datetime.today().date() - contract.high_Day_Last_Refreshed.date()).days >= 1 or contract.current_Price > contract.high_Post_Buy: # if its been at least one day since high data was retrieved, retrieve it
                 contract.high_Day_Last_Refreshed = datetime.today()
-                hist_Data = yf.download(contract_symbol, start=contract.datetime_Obj, end=datetime.today())
+                hist_Data = yf.download(contract_symbol, start=contract.datetime_Obj+timedelta(days=1), end=datetime.today())
                 high_Obj = hist_Data['High'].sort_values(by=contract_symbol, ascending=False).iloc[0]
                 contract.high_Post_Buy = high_Obj.iloc[0]
                 contract.high_Days_Out = (high_Obj.name.date() - contract.datetime_Obj.date()).days
