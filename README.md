@@ -54,6 +54,6 @@ xlwings addin install
 xlwings addin remove
 pip uninstall xlwings
 
-# Notes:
+## Notes:
  - Excel must be installed on your system.
  - The add-in version should always match the Python package version.
